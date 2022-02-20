@@ -5,8 +5,7 @@ from pqdm.processes import pqdm
 from functools import cached_property
 from multiprocessing import cpu_count
 from typing import Callable, List, Optional, Union
-from zemberek import ZemberekDocker, ZemberekJava
-
+from zemberek import ZemberekDocker
 
 spacy.tokens.Token.set_extension("preprocessed", default=None, force=True)
 
@@ -31,7 +30,7 @@ class Preprocessor:
             "remove_number",
             "remove_punctuation",
         ],
-        zemberek: Optional[Union[ZemberekDocker, ZemberekJava]] = None,
+        zemberek: Optional[ZemberekDocker] = None,
         tokenizer: Optional[Callable] = None,
         n_jobs: Optional[int] = None,
     ) -> None:
@@ -46,11 +45,9 @@ class Preprocessor:
                 Preprocessor.tokenize function to be added in the list beforehand.
                 Defaults to [ "remove_identity_child", "remove_identity_therapist", "remove_narration", "lowercase", "normalize_i", "remove_number", "remove_punctuation", ].
 
-            zemberek (Optional[Union[ZemberekDocker, ZemberekJava]], optional): Zemberek object to perform
+            zemberek (Optional[ZemberekDocker], optional): Zemberek object to perform
                 steps like pos detection, stemming, lemmatization which require morphological analysis.
-                ZemberekDocker has problems with parallel processing, n_jobs will be automatically
-                set to 1 if ZemberekDocker is used. Defaults to None, meaning operations
-                with morphology requirements will not be used.
+                Defaults to None, meaning operations with morphology requirements will not be used.
 
             tokenizer (Optional[Callable], optional): Custom spaCy tokenizer.
                 If no tokenizer is given, defaults to None and uses Turkish tokenizer of spaCy.
@@ -61,6 +58,7 @@ class Preprocessor:
         self.steps = steps
         self.zemberek = zemberek
         self.tokenizer = tokenizer if tokenizer else spacy.blank("tr").tokenizer
+        self.n_jobs = cpu_count() if not n_jobs else n_jobs
 
         self.filter_token = "<FILTERED>"
         self.name2func = {
@@ -78,11 +76,6 @@ class Preprocessor:
             "stem": self.stem,
             "lemma": self.lemma,
         }
-
-        if isinstance(self.zemberek, ZemberekDocker):
-            self.n_jobs = 1
-        else:
-            self.n_jobs = cpu_count() if not n_jobs else n_jobs
 
     def __call__(self, text: Union[str, List[str]]) -> Union[str, List[str]]:
         if isinstance(text, str) or isinstance(text, spacy.tokens.Doc):
@@ -120,7 +113,7 @@ class Preprocessor:
     def stem(self, document: spacy.tokens.Doc) -> spacy.tokens.Doc:
         if not self.zemberek:
             raise ZemberekNotInitializedError(
-                "self.zemberek is not initialized, pass a ZemberekDocker or ZemberekJava "
+                "self.zemberek is not initialized, pass a ZemberekDocker"
                 "object to Preprocessor to be able to use stemming"
             )
         return self._spacy_filter(
@@ -131,7 +124,7 @@ class Preprocessor:
     def lemma(self, document: spacy.tokens.Doc) -> spacy.tokens.Doc:
         if not self.zemberek:
             raise ZemberekNotInitializedError(
-                "self.zemberek is not initialized, pass a ZemberekDocker or ZemberekJava "
+                "self.zemberek is not initialized, pass a ZemberekDocker"
                 "object to Preprocessor to be able to use lemmatization"
             )
         return self._spacy_filter(
@@ -203,7 +196,7 @@ if __name__ == "__main__":
             "detokenize",
         ],
         zemberek=zemberek,
-        n_jobs=1,
+        n_jobs=4,
     )
 
     data = pd.read_csv(
