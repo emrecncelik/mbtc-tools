@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import List
 
 
 def generate_keyword_pattern(keywords: dict[str, list[str]]):
@@ -53,7 +52,7 @@ def _detect_keywords(
 
 
 def detect_keywords(
-    document: List[str],
+    document: list[str],
     merged_keyword_patterns: str,
     pattern2label: dict[str, str],
 ):
