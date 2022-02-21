@@ -5,7 +5,7 @@ from pqdm.processes import pqdm
 from functools import cached_property
 from multiprocessing import cpu_count
 from typing import Callable, List, Optional, Union
-from zemberek import ZemberekDocker
+from .zemberek import ZemberekDocker
 
 spacy.tokens.Token.set_extension("preprocessed", default=None, force=True)
 
@@ -81,7 +81,7 @@ class Preprocessor:
         if isinstance(text, str) or isinstance(text, spacy.tokens.Doc):
             return self.pipeline(text)
         elif isinstance(text, list):
-            return pqdm(text, self.pipeline, n_jobs=2)
+            return pqdm(text, self.pipeline, n_jobs=self.n_jobs)
 
     @cached_property
     def pipeline(self):
