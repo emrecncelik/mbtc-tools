@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import re
+import os
+import pandas as pd
+from ast import literal_eval
 
 
 def generate_keyword_pattern(keywords: dict[str, list[str]]):
@@ -60,6 +63,16 @@ def detect_keywords(
         _detect_keywords(sentence, merged_keyword_patterns, pattern2label)
         for sentence in document
     ]
+
+
+def read_formatted(data_dir: str, filename: str):
+    data = pd.read_csv(os.path.join(data_dir, filename), usecols=["file", "child_sent"])
+    data["child_sent"] = data["child_sent"].apply(literal_eval)
+    data = data.explode(column="child_sent")
+    # category = filename.split("_")[0]
+    label = filename.split("_")[1]
+    data["label"] = [label for _ in range(len(data))]
+    return data
 
 
 # if __name__ == "__main__":
