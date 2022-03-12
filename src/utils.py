@@ -2,8 +2,51 @@ from __future__ import annotations
 
 import re
 import os
+import json
+import logging
+import numpy as np
 import pandas as pd
 from ast import literal_eval
+
+logger = logging.getLogger(__name__)
+
+
+def match_file2id(mst_variables: pd.DataFrame, filenames: list[str]):
+    file2id = {}
+    mst_variables["found"] = [False for _ in range(len(mst_variables))]
+    mst_variables["filename"] = [np.NaN for _ in range(len(mst_variables))]
+    for idx, row in mst_variables.iterrows():
+        for filename in filenames:
+            filename_clean = (
+                filename.replace("MST", "")
+                .replace("xlsx", "")
+                .replace("_", "")
+                .replace(".", "")
+            )
+            if str(row["ID"]) in filename_clean:
+                file2id[filename] = f'{str(row["ID"])}_{row["Initials"]}'
+                mst_variables.loc[idx, "found"] = True
+                mst_variables.loc[idx, "filename"] = filename
+                logger.info(
+                    f"Matched: {filename} | ID_Initials: {row['ID']}_{row['Initials']}"
+                )
+
+    not_found = [f for f in filenames if f not in mst_variables["filename"].tolist()]
+    logger.info(f"Initial list of files not matched: {not_found}")
+
+    for idx, row in mst_variables[mst_variables.isna()["filename"]].iterrows():
+        for filename in not_found:
+            if row["Initials"] in filename:
+                mst_variables.loc[idx, "found"] = True
+                mst_variables.loc[idx, "filename"] = filename
+                not_found.remove(filename)
+                logger.info(
+                    f"Matched: {filename} | ID_Initials: {row['ID']}{row['Initials']}"
+                )
+
+    del mst_variables["found"]
+    logger.info(f"Final list of files not matched: {not_found}")
+    return mst_variables
 
 
 def generate_keyword_pattern(keywords: dict[str, list[str]]):
@@ -73,6 +116,28 @@ def read_formatted(data_dir: str, filename: str):
     label = filename.split("_")[1]
     data["label"] = [label for _ in range(len(data))]
     return data
+
+
+def load_json_data(filepath: str):
+    with open(filepath, "r") as f:
+        dataset = json.load(f)
+    return dataset
+
+
+def get_labeled_files_in_dir(data_dir: str, file_extension: str = "xlsx"):
+    labeled_files = pd.DataFrame()
+    dataset_name = data_dir.split("/")[-1].lower().replace(" ", "_")
+    labels = os.listdir(data_dir)
+
+    for label in labels:
+        label_dir = os.path.join(data_dir, label)
+        files = [f for f in os.listdir(label_dir) if f.split(".")[-1] == file_extension]
+        labels_temp = [label for _ in range(len(files))]
+        data_temp = {"filename": files, f"{dataset_name}_label": labels_temp}
+
+        labeled_files = pd.concat([labeled_files, pd.DataFrame(data_temp)])
+
+    return labeled_files.reset_index(drop=True)
 
 
 # if __name__ == "__main__":
