@@ -3,9 +3,6 @@
 
 from setuptools import find_packages, setup
 
-with open("README.md") as readme_file:
-    readme = readme_file.read()
-
 with open("requirements.txt") as requirements_file:
     requirements = requirements_file.readlines()
 
@@ -22,7 +19,6 @@ setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[requirements],
-    long_description=readme,
     include_package_data=True,
     packages=find_packages(
         include=[
