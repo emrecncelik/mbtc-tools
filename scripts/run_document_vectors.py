@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 
-from src.preprocessing import Preprocessor
+from mbtc_tools.preprocessing import Preprocessor
 from sentence_transformers import SentenceTransformer
-from src.utils import read_formatted, generate_keyword_pattern, detect_keywords
+from mbtc_tools.utils import read_formatted, generate_keyword_pattern, detect_keywords
 from weighted_bert.models import WeightedAverage, WeightedRemoval
 
 logger = logging.getLogger(__name__)

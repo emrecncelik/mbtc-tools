@@ -5,15 +5,9 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
-
+from mbtc_tools.utils import load_json_data
 
 logger = logging.getLogger(__name__)
-
-
-def load_data(filepath: str):
-    with open(filepath, "r") as f:
-        dataset = json.load(f)
-    return dataset
 
 
 def get_tsne_embeddings(dataset: pd.DataFrame):
@@ -22,11 +16,11 @@ def get_tsne_embeddings(dataset: pd.DataFrame):
     dataset["weighted_avg_tsne"] = list(
         TSNE(
             n_components=2,
-            perplexity=20,
+            perplexity=5,
             learning_rate="auto",
             init="pca",
             random_state=7,
-            n_iter=3000,
+            n_iter=5000,
         ).fit_transform(np.array(dataset["document_vector_weighted_avg"].tolist()))
     )
     logger.info("\tDone.")
@@ -35,11 +29,11 @@ def get_tsne_embeddings(dataset: pd.DataFrame):
     dataset["weighted_rm_tsne"] = list(
         TSNE(
             n_components=2,
-            perplexity=20,
+            perplexity=5,
             learning_rate="auto",
             init="pca",
             random_state=7,
-            n_iter=3000,
+            n_iter=5000,
         ).fit_transform(np.array(dataset["document_vector_weighted_rm"].tolist()))
     )
     logger.info("\tDone.")
@@ -48,11 +42,11 @@ def get_tsne_embeddings(dataset: pd.DataFrame):
     dataset["average_tsne"] = list(
         TSNE(
             n_components=2,
-            perplexity=20,
+            perplexity=5,
             learning_rate="auto",
             init="pca",
             random_state=7,
-            n_iter=3000,
+            n_iter=5000,
         ).fit_transform(np.array(dataset["document_vector_avg"].tolist()))
     )
     logger.info("\tDone.")
@@ -115,7 +109,7 @@ if __name__ == "__main__":
 
     prefixes = ["attachment", "behavior", "mst"]
     for p in prefixes:
-        dataset = load_data(f"data/{p}_vectorized.json")
+        dataset = load_json_data(f"data/{p}_vectorized.json")
         dataset = pd.DataFrame(dataset).T
         dataset = get_tsne_embeddings(dataset)
-        create_plots(dataset, f"figures/{p}_embeddings.png")
+        create_plots(dataset, f"figures/{p}_embeddings_p5.png")
