@@ -1,28 +1,28 @@
+import logging
 import pandas as pd
 from typing import Optional
 from dataclasses import dataclass
 from simple_parsing import ArgumentParser
-from simple_parsing.helpers import Serializable
 from mbtc_tools.data_formatting import DataFormatter
+
+logging.basicConfig(level=logging.INFO)
 
 
 @dataclass
-class DataArguments(Serializable):
+class DataArguments:
     mst_dir: str
     mst_var_file: str
     attachment_dir: str
     behavior_dir: str
     output_file: Optional[str] = "mst_formatted.csv"
-    separator: Optional[str] = "<#>"
-    argument_file: Optional[str] = None
+    sep: Optional[str] = "<#>"
 
 
 if __name__ == "__main__":
+
     parser = ArgumentParser()
     parser.add_arguments(DataArguments, dest="data_args")
     args = parser.parse_args()
-
-    args.data_args.save("formatting_args.json")
 
     # Read and apply initial formating on transcripts
     mst_transcripts = DataFormatter.read_mst_files(args.data_args.mst_dir)
@@ -52,6 +52,8 @@ if __name__ == "__main__":
         how="outer",
     )
     mst_transcripts = mst_transcripts.sort_values(by="filename")
+
+    logging.info(f"Final shape of the dataset: {mst_transcripts.shape}")
 
     # Write output
     if ".csv" in args.data_args.output_file:

@@ -3,10 +3,12 @@ from __future__ import annotations
 import os
 import re
 import logging
+import warnings
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+warnings.simplefilter("ignore")
 logger = logging.getLogger(__name__)
 
 
@@ -51,6 +53,8 @@ class DataFormatter:
                 all_transcripts["file"].append(file_name)
                 all_transcripts["data"].append(data)
                 all_transcripts["is_child_only"].append(False)
+
+        logger.info(f"Found and read {len(all_transcripts['file'])} transcripts.")
 
         return all_transcripts
 
@@ -104,6 +108,7 @@ class DataFormatter:
         Returns:
             pd.DataFrame: DataFrame containing child, therapist, conv. sentences and filenames
         """
+        logger.info("Formatting the transcripts.")
         formatted = []
         for idx, data in enumerate(tqdm(all_transcripts["data"])):
             if not all_transcripts["is_child_only"][idx]:
@@ -111,9 +116,7 @@ class DataFormatter:
                     try:
                         data.iloc[:, 0] = data.iloc[:, 0] + data.iloc[:, 1]
                     except IndexError:
-                        logger.info(
-                            f"Turns out {all_transcripts['file'][idx]} is actually single col."
-                        )
+                        pass
                 therapist_sents = sep.join(
                     [
                         sent[0]
@@ -150,8 +153,15 @@ class DataFormatter:
                         "conversation_sent": conv_sents,
                     }
                 )
+        formatted_transcripts = pd.DataFrame(formatted)
 
-        return pd.DataFrame(formatted)
+        logger.info(
+            f"Shape of DataFrame after formatting: {formatted_transcripts.shape}"
+        )
+        logger.info(
+            f"Columns of DataFrame after formatting: {formatted_transcripts.columns}"
+        )
+        return formatted_transcripts
 
     @staticmethod
     def match_filename2id(
@@ -166,6 +176,7 @@ class DataFormatter:
         Returns:
             pd.DataFrame: DataFrame containing child, therapist, conv. sentences, filenames, ids, variables
         """
+        logger.info("Matching file names with ids.")
         file2id = {}
         mst_variables["found"] = [False for _ in range(len(mst_variables))]
         mst_variables["filename"] = [np.NaN for _ in range(len(mst_variables))]
@@ -181,7 +192,7 @@ class DataFormatter:
                     file2id[filename] = f'{str(row["ID"])}_{row["Initials"]}'
                     mst_variables.loc[idx, "found"] = True
                     mst_variables.loc[idx, "filename"] = filename
-                    logger.info(
+                    logger.debug(
                         f"Matched: {filename} | ID_Initials: {row['ID']}_{row['Initials']}"
                     )
 
@@ -198,7 +209,7 @@ class DataFormatter:
                     mst_variables.loc[idx, "found"] = True
                     mst_variables.loc[idx, "filename"] = filename
                     not_found.remove(filename)
-                    logger.info(
+                    logger.debug(
                         f"Matched: {filename} | ID_Initials: {row['ID']}{row['Initials']}"
                     )
 
@@ -229,6 +240,7 @@ class DataFormatter:
         Returns:
             pd.DataFrame: DataFrame containing filenames and {data_dir}_labels
         """
+        logger.info(f"Reading labeled files from {data_dir}")
         labeled_files = pd.DataFrame()
         dataset_name = data_dir.split("/")[-1].lower().replace(" ", "_")
         labels = os.listdir(data_dir)
@@ -243,4 +255,8 @@ class DataFormatter:
 
             labeled_files = pd.concat([labeled_files, pd.DataFrame(data_temp)])
 
+        logger.info(
+            f"Num. of MST files labeled for {dataset_name}: {labeled_files.shape[0]}"
+        )
+        logger.info(f"Labels: {labels}")
         return labeled_files.reset_index(drop=True)
