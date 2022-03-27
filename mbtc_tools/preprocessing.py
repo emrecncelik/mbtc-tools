@@ -1,7 +1,7 @@
 import re
 import spacy
 from cytoolz import functoolz
-from pqdm.processes import pqdm
+from joblib import delayed, Parallel
 from functools import cached_property
 from multiprocessing import cpu_count
 from typing import Callable, List, Optional, Union
@@ -81,7 +81,9 @@ class Preprocessor:
         if isinstance(text, str) or isinstance(text, spacy.tokens.Doc):
             return self.pipeline(text)
         elif isinstance(text, list):
-            return pqdm(text, self.pipeline, n_jobs=self.n_jobs)
+            return Parallel(n_jobs=self.n_jobs, backend="multiprocessing")(
+                delayed(self.pipeline)(t) for t in text
+            )
 
     @cached_property
     def pipeline(self):
