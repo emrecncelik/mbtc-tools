@@ -1,4 +1,4 @@
-python run_data_formatting.py \
+python format_data.py \
     --mst_dir /home/emrecan/workspace/psychology-project/data/MST_all \
     --mst_var_file /home/emrecan/workspace/psychology-project/data/mst_variables.csv \
     --attachment_dir /home/emrecan/workspace/psychology-project/data/Attachment \
