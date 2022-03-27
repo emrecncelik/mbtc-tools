@@ -4,9 +4,10 @@ import re
 import os
 import json
 import logging
-import numpy as np
 import pandas as pd
-from ast import literal_eval
+import numpy as np
+import random
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,19 @@ def _detect_keywords(
     return labels
 
 
+def get_rule_based_keyword_detector_kwargs(filepath: str = "data/keywords.json"):
+    with open(filepath, "r") as f:
+        keywords = json.load(f)
+    del keywords["cas"]  # causality removed for now
+
+    merged_keyword_patterns, pattern2label = generate_keyword_pattern(keywords)
+    entity_detector_kwargs = {
+        "merged_keyword_patterns": merged_keyword_patterns,
+        "pattern2label": pattern2label,
+    }
+    return entity_detector_kwargs
+
+
 def detect_keywords(
     document: list[str],
     merged_keyword_patterns: str,
@@ -70,17 +84,40 @@ def detect_keywords(
     ]
 
 
-def read_formatted(data_dir: str, filename: str):
-    data = pd.read_csv(os.path.join(data_dir, filename), usecols=["file", "child_sent"])
-    data["child_sent"] = data["child_sent"].apply(literal_eval)
-    data = data.explode(column="child_sent")
-    # category = filename.split("_")[0]
-    label = filename.split("_")[1]
-    data["label"] = [label for _ in range(len(data))]
-    return data
+def seed_everything(seed: int):
+    random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
+
+
+def read_formatted_dataset(
+    filepath: str, text_column: str, usecols: list[str] = [], sep="<#>", **kwargs
+):
+    usecols.extend(["filename", text_column])
+    if ".xlsx" in filepath:
+        dataset = pd.read_excel(filepath, usecols=usecols, **kwargs)
+    elif ".csv" in filepath:
+        dataset = pd.read_csv(filepath, usecols=usecols, **kwargs)
+    else:
+        raise ValueError(
+            f"Extension {filepath.split('.')[-1]} is not supported. Use csv or xlsx."
+        )
+    dataset[text_column] = dataset[text_column].apply(lambda x: x.split(sep))
+    return dataset
 
 
 def load_json_data(filepath: str):
     with open(filepath, "r") as f:
         dataset = json.load(f)
     return dataset
+
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
