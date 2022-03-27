@@ -8,3 +8,4 @@ __pycache__
 *.csv
 *.png
 *.egg-info
+*.json
