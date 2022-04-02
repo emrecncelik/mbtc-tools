@@ -1,12 +1,23 @@
+from __future__ import annotations
+
+import logging
 import re
-import spacy
-from cytoolz import functoolz
-from joblib import delayed, Parallel
 from functools import cached_property
+from itertools import chain
 from multiprocessing import cpu_count
 from typing import Callable, List, Optional, Union
+
+import spacy
+from cytoolz import functoolz
+from joblib import Parallel, delayed
+from nltk.tokenize import sent_tokenize
+from tqdm import tqdm
+
 from .zemberek import ZemberekDocker
 
+tqdm.pandas()
+
+logger = logging.getLogger(__name__)
 spacy.tokens.Token.set_extension("preprocessed", default=None, force=True)
 
 
@@ -176,6 +187,29 @@ class Preprocessor:
 
     def remove_number(self, text: str) -> str:
         return "".join(i for i in text if not i.isdigit())
+
+
+def apply_preprocessing(
+    dataset: pd.DataFrame,
+    preprocessing_steps: list[str | Callable],
+    text_column: str,
+    **preprocessor_kwargs,
+) -> pd.DataFrame:
+    preprocessor = Preprocessor(steps=list(preprocessing_steps), **preprocessor_kwargs)
+    logger.info("Preprocessing started.")
+    logger.info("Before preprocessing:")
+    logger.info(dataset[text_column][0][:10])
+    tokenize_sentences = lambda texts: list(
+        chain.from_iterable([sent_tokenize(text, "turkish") for text in texts])
+    )
+    logger.info("Tokenizing sentences.")
+    dataset[text_column] = dataset[text_column].progress_apply(tokenize_sentences)
+    logger.info("Applying preprocessing steps.")
+    dataset[text_column] = dataset[text_column].progress_apply(preprocessor)
+    logger.info("After preprocessing:")
+    logger.info(dataset[text_column][0][:10])
+
+    return dataset
 
 
 if __name__ == "__main__":

@@ -3,12 +3,11 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from itertools import chain
 from typing import Optional
 
 import numpy as np
 import pandas as pd
-from mbtc_tools.preprocessing import Preprocessor
+from mbtc_tools.preprocessing import apply_preprocessing
 from mbtc_tools.utils import (
     NumpyEncoder,
     detect_keywords,
@@ -16,14 +15,12 @@ from mbtc_tools.utils import (
     read_formatted_dataset,
     seed_everything,
 )
-from nltk.tokenize import sent_tokenize
 from sentence_transformers import SentenceTransformer
 from simple_parsing import ArgumentParser, Serializable, field
 from tqdm.auto import tqdm
 from weighted_bert.models import WeightedAverage, WeightedRemoval
 
 logger = logging.getLogger(__name__)
-tqdm.pandas()
 
 
 @dataclass
@@ -109,30 +106,12 @@ def main(args: Configuration):
         if args.n_rows:
             dataset = dataset[: args.n_rows]
 
-        logger.info(f"Formatted transcript file loaded.")
-        logger.info(f"\tNum. of transcripts: {len(dataset.filename.unique())}")
-        logger.info(f"\tColumns: {list(dataset.columns)}")
-        logger.info(f"\tShape: {dataset.shape}")
-        logger.info(dataset.head())
-
-        # Preprocessing ============================================
-        preprocessor = Preprocessor(steps=list(args.preprocessing_steps), n_jobs=1)
-        logger.info("Preprocessing started.")
-        logger.info("Before preprocessing:")
-        logger.info(dataset[args.text_column][0][:10])
-        tokenize_sentences = lambda texts: list(
-            chain.from_iterable([sent_tokenize(text, "turkish") for text in texts])
+        dataset = apply_preprocessing(
+            dataset,
+            preprocessing_steps=args.preprocessing_steps,
+            text_column=args.text_column,
+            n_jobs=1,
         )
-        logger.info("Tokenizing sentences.")
-        dataset[args.text_column] = dataset[args.text_column].progress_apply(
-            tokenize_sentences
-        )
-        logger.info("Applying preprocessing steps.")
-        dataset[args.text_column] = dataset[args.text_column].progress_apply(
-            preprocessor
-        )
-        logger.info("After preprocessing:")
-        logger.info(dataset[args.text_column][0][:10])
 
         if args.save_preprocessed:
             logger.info("Saving preprocessed data.")
