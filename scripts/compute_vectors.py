@@ -5,20 +5,17 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 from mbtc_tools.preprocessing import apply_preprocessing
 from mbtc_tools.utils import (
     NumpyEncoder,
-    detect_keywords,
     get_rule_based_keyword_detector_kwargs,
     read_formatted_dataset,
     seed_everything,
 )
-from sentence_transformers import SentenceTransformer
 from simple_parsing import ArgumentParser, Serializable, field
-from tqdm.auto import tqdm
-from weighted_bert.models import WeightedAverage, WeightedRemoval
+
+from mbtc_tools.vectorization import SentenceTransformersVectorizer
 
 logger = logging.getLogger(__name__)
 
@@ -122,48 +119,23 @@ def main(args: Configuration):
         logger.info(dataset.head())
 
     # Compute sentence vectors ============================================
-    vectorizer = SentenceTransformer(args.vectorizer)
-    logger.info(f"\tModel loaded.")
-    logger.info(f"Computing sentence vectors.")
-
-    dataset["sentence_vectors"] = dataset[args.text_column].apply(vectorizer.encode)
+    vectorizer = SentenceTransformersVectorizer(averaging=args.averaging)
+    vectorizer.load_embedding_model(args.vectorizer)
 
     if args.entity_detector == "rule_based":
         entity_detector_kwargs = get_rule_based_keyword_detector_kwargs(
             os.path.join(args.input_dir, "keywords.json")
         )
-        if args.averaging == "simple":
-            weighter = lambda x: np.mean(x, axis=0)
-        elif args.averaging == "weighted_average":
-            weighter = WeightedAverage(
-                entity_detector=detect_keywords,
-                entity_detector_kwargs=entity_detector_kwargs,
-            )
-        elif args.averaging == "weighted_removal":
-            weighter = WeightedRemoval(
-                entity_detector=detect_keywords,
-                entity_detector_kwargs=entity_detector_kwargs,
-            )
+        vectorizer.load_entity_detector_model(
+            rule_based_entity_detector_data=entity_detector_kwargs
+        )
     else:
-        NotImplementedError("Logic for NER model not implemented yet. Use rule_based.")
-
-    if args.averaging == "simple":
-        dataset["document_vector"] = dataset["sentence_vectors"].apply(weighter)
-    elif args.averaging == "weighted_average":
-        document_vectors = []
-        for _, row in tqdm(dataset.iterrows()):
-            document_vectors.append(
-                weighter.get_document_embedding(
-                    document=row[args.text_column],
-                    sentence_embeddings=row["sentence_vectors"],
-                )
-            )
-        dataset["document_vector"] = document_vectors
-    elif args.averaging == "weighted_removal":
-        dataset["document_vector"] = weighter.get_document_embeddings(
-            documents=dataset[args.text_column].tolist(),
-            collection_sentence_embeddings=dataset["sentence_vectors"].tolist(),
-        ).tolist()
+        vectorizer.load_entity_detector_model(
+            model_path_or_checkpoint=args.entity_detector
+        )
+    dataset["document_vector"] = vectorizer.fit_transform(
+        dataset[args.text_column].tolist()
+    ).tolist()
 
     dataset.to_json(
         os.path.join(
