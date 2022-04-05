@@ -23,8 +23,15 @@ class NotReadyToFit(Exception):
 class Vectorizer(ABC):
     """Common interface for various embedding methods"""
 
-    def __init__(self, averaging: str) -> None:
+    def __init__(
+        self,
+        averaging: str,
+        entity_model_name: str = None,
+        rule_based_entity_detector_data: dict = None,
+    ) -> None:
         self.averaging = averaging
+        self.entity_model_name = entity_model_name
+        self.rule_based_entity_detector_data = rule_based_entity_detector_data
 
         self.entity_detector = None
         self.embedding_model = None
@@ -35,6 +42,10 @@ class Vectorizer(ABC):
                 f"{self.averaging} is not a valid averaging method, use one of three: "
                 '"simple", "weighted_average", "weighted_removal"'
             )
+
+        self._load_entity_detector_model(
+            entity_model_name, rule_based_entity_detector_data
+        )
 
     def _is_ready_to_fit(self):
         return self.entity_detector and self.averaging_model and self.embedding_model
@@ -67,11 +78,10 @@ class Vectorizer(ABC):
             elif model_path_or_checkpoint:
                 raise NotImplementedError
 
-    def load_entity_detector_model(
+    def _load_entity_detector_model(
         self,
         model_path_or_checkpoint: str = None,
         rule_based_entity_detector_data: dict = None,
-        **kwargs,
     ) -> Vectorizer:
         if model_path_or_checkpoint:
             raise NotImplementedError
@@ -89,28 +99,32 @@ class Vectorizer(ABC):
         return self
 
     @abstractmethod
-    def load_embedding_model(
+    def _load_embedding_model(
         self, model_path_or_checkpoint: str, **kwargs
     ) -> Vectorizer:
         pass
 
 
 class SentenceTransformersVectorizer(Vectorizer, BaseEstimator, TransformerMixin):
-    def __init__(self, averaging: str, **encode_kwargs) -> None:
-        super().__init__(averaging)
-        self.encode_kwargs = encode_kwargs
+    def __init__(
+        self,
+        averaging: str,
+        embedding_model_name: str,
+        entity_model_name: str = None,
+        rule_based_entity_detector_data: dict = None,
+    ) -> None:
+        super().__init__(averaging, entity_model_name, rule_based_entity_detector_data)
+        self.embedding_model_name = embedding_model_name
+        self._load_embedding_model()
 
-    def load_embedding_model(self, model_path_or_checkpoint: str, **kwargs):
-        self.embedding_model = SentenceTransformer(model_path_or_checkpoint, **kwargs)
+    def _load_embedding_model(self):
+        self.embedding_model = SentenceTransformer(self.embedding_model_name)
         return self
 
     def fit(self, X: list[list[str]], y=None):
         if self._is_ready_to_fit():
             input_examples = [
-                InputExample(
-                    doc, self.embedding_model.encode(doc, **self.encode_kwargs)
-                )
-                for doc in X
+                InputExample(doc, self.embedding_model.encode(doc)) for doc in X
             ]
 
             self.averaging_model = self.averaging_model.fit(input_examples)
@@ -125,7 +139,7 @@ class SentenceTransformersVectorizer(Vectorizer, BaseEstimator, TransformerMixin
     def transform(self, X):
         check_is_fitted(self)
 
-        sentence_embeddings = self.embedding_model.encode(X, **self.encode_kwargs)
+        sentence_embeddings = self.embedding_model.encode(X)
         input_examples = [
             InputExample(doc, embed) for doc, embed in zip(X, sentence_embeddings)
         ]
