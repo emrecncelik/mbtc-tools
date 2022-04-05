@@ -14,7 +14,6 @@ from mbtc_tools.utils import (
     seed_everything,
 )
 from simple_parsing import ArgumentParser, Serializable, field
-
 from mbtc_tools.vectorization import SentenceTransformersVectorizer
 
 logger = logging.getLogger(__name__)
@@ -75,114 +74,116 @@ class Configuration(Serializable):
     seed: Optional[int] = 7
 
 
-def main(args: Configuration):
-    seed_everything(args.seed)
+def main(config: Configuration):
+    seed_everything(config.seed)
 
-    input_dir_content = os.listdir(args.input_dir)
+    input_dir_content = os.listdir(config.input_dir)
     if "mst_formatted.csv" not in input_dir_content:
         raise FileNotFoundError("Input dir should contain mst_formatted.csv file.")
     if (
         "keywords.json" not in input_dir_content
-        and args.entity_detector == "rule_based"
-        and args.averaging != "simple"
+        and config.entity_detector == "rule_based"
+        and config.averaging != "simple"
     ):
         raise ValueError(
             "Please provide keywords.json file in input_dir "
-            f"while using {args.entity_detector} entity_detector and "
-            f"{args.averaging} averaging."
+            f"while using {config.entity_detector} entity_detector and "
+            f"{config.averaging} averaging."
         )
 
-    if not args.load_preprocessed:
+    if not config.load_preprocessed:
         # Read the dataset ============================================
         dataset = read_formatted_dataset(
-            os.path.join(args.input_dir, "mst_formatted.csv"),
-            text_column=args.text_column,
-            sep=args.sep,
+            os.path.join(config.input_dir, "mst_formatted.csv"),
+            text_column=config.text_column,
+            sep=config.sep,
         )
 
-        if args.n_rows:
-            dataset = dataset[: args.n_rows]
+        if config.n_rows:
+            dataset = dataset[: config.n_rows]
 
         dataset = apply_preprocessing(
             dataset,
-            preprocessing_steps=args.preprocessing_steps,
-            text_column=args.text_column,
+            preprocessing_steps=config.preprocessing_steps,
+            text_column=config.text_column,
             n_jobs=1,
         )
 
-        if args.save_preprocessed:
+        if config.save_preprocessed:
             logger.info("Saving preprocessed data.")
-            dataset.to_json(os.path.join(args.output_dir, "preprocessed.json"))
+            dataset.to_json(os.path.join(config.output_dir, "preprocessed.json"))
     else:
         logger.info("Reading preprocessed dataset.")
-        dataset = pd.read_json(args.load_preprocessed)
+        dataset = pd.read_json(config.load_preprocessed)
         logger.info(dataset.head())
 
     # Compute sentence vectors ============================================
-    vectorizer = SentenceTransformersVectorizer(averaging=args.averaging)
-    vectorizer.load_embedding_model(args.vectorizer)
+    vectorizer = SentenceTransformersVectorizer(averaging=config.averaging)
+    vectorizer.load_embedding_model(config.vectorizer)
 
-    if args.entity_detector == "rule_based":
+    if config.entity_detector == "rule_based":
         entity_detector_kwargs = get_rule_based_keyword_detector_kwargs(
-            os.path.join(args.input_dir, "keywords.json")
+            os.path.join(config.input_dir, "keywords.json")
         )
         vectorizer.load_entity_detector_model(
             rule_based_entity_detector_data=entity_detector_kwargs
         )
     else:
         vectorizer.load_entity_detector_model(
-            model_path_or_checkpoint=args.entity_detector
+            model_path_or_checkpoint=config.entity_detector
         )
     dataset["document_vector"] = vectorizer.fit_transform(
-        dataset[args.text_column].tolist()
+        dataset[config.text_column].tolist()
     ).tolist()
 
     dataset.to_json(
         os.path.join(
-            args.output_dir,
-            f"{args.averaging}_{args.entity_detector}_vectors.json",
+            config.output_dir,
+            f"{config.averaging}_{config.entity_detector}_vectors.json",
         ),
         default_handler=NumpyEncoder,
     )
 
 
 if __name__ == "__main__":
-    # input_dir = "/home/emrecan/workspace/psychology-project/data"
-    # output_dir = "/home/emrecan/workspace/psychology-project/outputs"
-    # vectorizer = "emrecan/bert-base-turkish-cased-mean-nli-stsb-tr"
+    input_dir = "/home/emrecan/workspace/psychology-project/data"
+    output_dir = "/home/emrecan/workspace/psychology-project/outputs"
+    vectorizer = "emrecan/bert-base-turkish-cased-mean-nli-stsb-tr"
 
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
     parser = ArgumentParser()
-    parser.add_arguments(Configuration, dest="args")
+    parser.add_arguments(Configuration, dest="config")
 
-    # args = parser.parse_args(
-    #     f"--output_dir {output_dir} --text_column child_sent --vectorizer {vectorizer} "
-    #     "--entity_detector rule_based --averaging weighted_removal --load_preprocessed cached_data.json".split()
-    # )
+    args = parser.parse_args(
+        f"--input_dir {input_dir} --output_dir {output_dir} --text_column child_sent --vectorizer {vectorizer} "
+        "--entity_detector rule_based --averaging weighted_removal --n_rows 5".split()
+    )
 
     # args = parser.parse_args(
     #     f"--config /home/emrecan/workspace/psychology-project/outputs/configuration.json".split()
     # )
 
-    args = parser.parse_args()
+    # args = parser.parse_args()
 
-    if args.args.config:
-        args.args = Configuration.load(args.args.config, drop_extra_fields=False)
+    if args.config.config:
+        args.config = Configuration.load(args.config.config, drop_extra_fields=False)
     else:
         if (
-            not args.args.input_dir
-            or not args.args.output_dir
-            or not args.args.vectorizer
-            or not args.args.entity_detector
+            not args.config.input_dir
+            or not args.config.output_dir
+            or not args.config.vectorizer
+            or not args.config.entity_detector
         ):
             raise ValueError(
                 f"Provide input_dir, output_dir, vectorizer and entity_detector when not using a config file."
             )
 
-    if not os.path.exists(args.args.output_dir):
-        os.makedirs(args.args.output_dir)
+    if not os.path.exists(args.config.output_dir):
+        os.makedirs(args.config.output_dir)
 
-    args.args.save(os.path.join(args.args.output_dir, "configuration.json"), indent=4)
-    main(args.args)
+    args.config.save(
+        os.path.join(args.config.output_dir, "configuration.json"), indent=4
+    )
+    main(args.config)
