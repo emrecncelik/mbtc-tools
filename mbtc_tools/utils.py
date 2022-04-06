@@ -12,6 +12,15 @@ import torch
 logger = logging.getLogger(__name__)
 
 
+def get_mst_data_path(datadir: str, target_variable: str = None, split: str = None):
+    print(target_variable, split)
+    if target_variable != None and split != None:
+        output_path = os.path.join(datadir, f"{target_variable}_formatted")
+        return f"{output_path}_{split}.csv"
+    else:
+        return os.path.join(datadir, f"mst_formatted.csv")
+
+
 def generate_keyword_pattern(keywords: dict[str, list[str]]):
     pattern2label = {}
     for key in keywords:
@@ -98,9 +107,7 @@ def read_formatted_dataset(
     filepath: str, text_column: str, usecols: list[str] = [], sep="<#>", **kwargs
 ):
     usecols.extend(["filename", text_column])
-    if ".xlsx" in filepath:
-        dataset = pd.read_excel(filepath, usecols=usecols, **kwargs)
-    elif ".csv" in filepath:
+    if ".csv" in filepath:
         dataset = pd.read_csv(filepath, usecols=usecols, **kwargs)
     else:
         raise ValueError(
