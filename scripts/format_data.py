@@ -9,6 +9,8 @@ from simple_parsing import ArgumentParser, field
 from mbtc_tools.data_formatting import DataFormatter
 from sklearn.model_selection import train_test_split
 
+from mbtc_tools.utils import get_mst_data_path
+
 logging.basicConfig(level=logging.INFO)
 
 
@@ -134,13 +136,17 @@ if __name__ == "__main__":
         logging.info(f"Test shape: {test.shape}")
 
         train.to_csv(
-            f"{output_path}_train.csv",
+            get_mst_data_path(
+                args.config.output_dir, args.config.target_variable, "train"
+            ),
             index=False,
         )
         test.to_csv(
-            f"{output_path}_test.csv",
+            get_mst_data_path(
+                args.config.output_dir, args.config.target_variable, "test"
+            ),
             index=False,
         )
     else:
-        output_path = os.path.join(args.config.output_dir, f"mst_formatted")
+        output_path = os.path.join(args.config.output_dir, f"mst_formatted.csv")
         mst_transcripts.to_csv(output_path, index=False)
