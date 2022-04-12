@@ -15,7 +15,11 @@ class CommonArguments(Serializable):
 
 @dataclass
 class ClassifierArguments(Serializable):
-    pass
+    pipeline: list[str] = field(
+        choices=["pca", "svm", "elm", "sbert_vectorizer", "scaler"],
+        default_factory=["sbert_vectorizer", "scaler", "svc"].copy,
+    )
+    do_test: bool = False
 
 
 @dataclass
