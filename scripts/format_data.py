@@ -77,6 +77,8 @@ if __name__ == "__main__":
     behavior_labeled_files = DataFormatter.get_labeled_files_in_dir(
         args.config.behavior_dir
     )
+
+    # Add attachment and behavior labels to variables
     mst_transcripts = mst_transcripts.merge(
         attachment_labeled_files,
         on="filename",
@@ -86,12 +88,15 @@ if __name__ == "__main__":
         on="filename",
         how="outer",
     )
+
+    # Drop scripts with no ID mathced with filename
     mst_transcripts = (
         mst_transcripts.sort_values(by="filename")
         .replace(" ", pd.NA)
         .dropna(subset=["ID"])
     )
-    if not args.config.all_variables:
+    if not args.config.all_variables and args.config.target_variable:
+        # Drop scripts with NA target values
         mst_transcripts = mst_transcripts[
             args.config.columns + [args.config.target_variable]
         ].dropna(subset=[args.config.target_variable])
@@ -99,6 +104,7 @@ if __name__ == "__main__":
 
         if args.config.target_variable_type == "categorical":
             logging.info("Removing low frequency labels.")
+            # Remove low frequency labels
             mst_transcripts = mst_transcripts[
                 mst_transcripts.groupby(args.config.target_variable)[
                     args.config.target_variable
@@ -108,20 +114,26 @@ if __name__ == "__main__":
             ]
             logging.info(f"Shape of the dataset after removal: {mst_transcripts.shape}")
 
-            train, test, _, _ = train_test_split(
-                mst_transcripts,
-                mst_transcripts[args.config.target_variable],
-                test_size=args.config.test_size,
-                stratify=mst_transcripts[args.config.target_variable],
-                random_state=args.config.seed,
-            )
+            if args.config.test_size:
+                train, test, _, _ = train_test_split(
+                    mst_transcripts,
+                    mst_transcripts[args.config.target_variable],
+                    test_size=args.config.test_size,
+                    stratify=mst_transcripts[args.config.target_variable],
+                    random_state=args.config.seed,
+                )
+            else:
+                train = mst_transcripts
         elif args.config.target_variable_type == "numeric":
-            train, test, _, _ = train_test_split(
-                mst_transcripts,
-                mst_transcripts[args.config.target_variable],
-                test_size=args.config.test_size,
-                stratify=mst_transcripts[args.config.target_variable],
-            )
+            if args.config.test_size:
+                train, test, _, _ = train_test_split(
+                    mst_transcripts,
+                    mst_transcripts[args.config.target_variable],
+                    test_size=args.config.test_size,
+                    stratify=mst_transcripts[args.config.target_variable],
+                )
+            else:
+                train = mst_transcripts
         else:
             raise ValueError(
                 "Target variable type must be 'numeric' or 'categorical'."
@@ -133,20 +145,21 @@ if __name__ == "__main__":
         )
 
         logging.info(f"Train shape: {train.shape}")
-        logging.info(f"Test shape: {test.shape}")
-
         train.to_csv(
             get_mst_data_path(
                 args.config.output_dir, args.config.target_variable, "train"
             ),
             index=False,
         )
-        test.to_csv(
-            get_mst_data_path(
-                args.config.output_dir, args.config.target_variable, "test"
-            ),
-            index=False,
-        )
+
+        if args.config.test_size:
+            logging.info(f"Test shape: {test.shape}")
+            test.to_csv(
+                get_mst_data_path(
+                    args.config.output_dir, args.config.target_variable, "test"
+                ),
+                index=False,
+            )
     else:
         output_path = os.path.join(args.config.output_dir, f"mst_formatted.csv")
         mst_transcripts.to_csv(output_path, index=False)
