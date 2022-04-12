@@ -1,164 +1,60 @@
 from __future__ import annotations
 
 import logging
-import numpy as np
+from itertools import chain
 
-from abc import ABC, abstractmethod
+import numpy as np
 from sentence_transformers import SentenceTransformer
 from weighted_bert.data import InputExample
 from weighted_bert.models import WeightedAverage, WeightedRemoval
+
 from mbtc_tools.utils import detect_keywords
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.utils.validation import check_is_fitted
 
 logger = logging.getLogger(__name__)
 
 
-class NotReadyToFit(Exception):
-    """Raised when vectorizer models are not loaded but fit is called."""
+def get_input_examples_from_docs(
+    docs: list[list[str]], sentence_transformer: SentenceTransformer
+):
+    doc_lengths = [len(doc) for doc in docs]
+    sentences = list(chain.from_iterable(docs))
+    sentence_embeddings = sentence_transformer.encode(sentences)
+    document_embeddings = []
+    prev = 0
+    for idx in range(len(doc_lengths)):
+        document_embeddings.append(sentence_embeddings[prev : doc_lengths[idx] + prev])
+        prev += doc_lengths[idx]
+    input_examples = [
+        InputExample(doc, embed) for doc, embed in zip(docs, document_embeddings)
+    ]
+    return input_examples
 
-    pass
 
-
-class Vectorizer(ABC):
-    """Common interface for various embedding methods"""
-
-    def __init__(
-        self,
-        averaging: str,
-        entity_model_name: str = None,
-        rule_based_entity_detector_data: dict = None,
-    ) -> None:
-        self.averaging = averaging
-        self.entity_model_name = entity_model_name
-        self.rule_based_entity_detector_data = rule_based_entity_detector_data
-
-        self.entity_detector = None
-        self.embedding_model = None
-        self.averaging_model = None
-
-        if not self._is_averaging_valid():
-            raise ValueError(
-                f"{self.averaging} is not a valid averaging method, use one of three: "
-                '"simple", "weighted_average", "weighted_removal"'
+def initialize_averaging_model(
+    averaging_method: str,
+    rule_based_entity_detector_data: dict = None,
+    model_path_or_checkpoint: str = None,
+):
+    if averaging_method == "simple":
+        return lambda x: np.mean(x, axis=0)
+    elif averaging_method == "weighted_average":
+        if rule_based_entity_detector_data:
+            return WeightedAverage(
+                entity_detector=detect_keywords,
+                entity_detector_kwargs=rule_based_entity_detector_data,
             )
-
-        self._load_entity_detector_model(
-            entity_model_name, rule_based_entity_detector_data
-        )
-
-    def _is_ready_to_fit(self):
-        return self.entity_detector and self.averaging_model and self.embedding_model
-
-    def _is_averaging_valid(self):
-        return self.averaging in ["simple", "weighted_average", "weighted_removal"]
-
-    def _init_averaging_model(
-        self,
-        model_path_or_checkpoint: str = None,
-        rule_based_entity_detector_data: dict = None,
-    ):
-        if self.averaging == "simple":
-            return lambda x: np.mean(x, axis=0)
-        elif self.averaging == "weighted_average":
-            if rule_based_entity_detector_data:
-                return WeightedAverage(
-                    entity_detector=self.entity_detector,
-                    entity_detector_kwargs=rule_based_entity_detector_data,
-                )
-            elif model_path_or_checkpoint:
-                raise NotImplementedError
-
-        elif self.averaging == "weighted_removal":
-            if rule_based_entity_detector_data:
-                return WeightedRemoval(
-                    entity_detector=self.entity_detector,
-                    entity_detector_kwargs=rule_based_entity_detector_data,
-                )
-            elif model_path_or_checkpoint:
-                raise NotImplementedError
-
-    def _load_entity_detector_model(
-        self,
-        model_path_or_checkpoint: str = None,
-        rule_based_entity_detector_data: dict = None,
-    ) -> Vectorizer:
-        if model_path_or_checkpoint:
+        elif model_path_or_checkpoint:
             raise NotImplementedError
-        elif rule_based_entity_detector_data:
-            self.entity_detector = detect_keywords
-        else:
-            raise ValueError(
-                "Provide model_path_or_checkpoint or rule_based_entity_detector_data."
-            )
 
-        self.averaging_model = self._init_averaging_model(
-            model_path_or_checkpoint, rule_based_entity_detector_data
+    elif averaging_method == "weighted_removal":
+        if rule_based_entity_detector_data:
+            return WeightedRemoval(
+                entity_detector=detect_keywords,
+                entity_detector_kwargs=rule_based_entity_detector_data,
+            )
+        elif model_path_or_checkpoint:
+            raise NotImplementedError
+    else:
+        raise ValueError(
+            "Invalid choice of averaging method. Choose one of simple, weighted_average or weighted_removal."
         )
-
-        return self
-
-    @abstractmethod
-    def _load_embedding_model(
-        self, model_path_or_checkpoint: str, **kwargs
-    ) -> Vectorizer:
-        pass
-
-
-class SentenceTransformersVectorizer(Vectorizer, BaseEstimator, TransformerMixin):
-    def __init__(
-        self,
-        averaging: str,
-        embedding_model_name: str,
-        entity_model_name: str = None,
-        rule_based_entity_detector_data: dict = None,
-    ) -> None:
-        super().__init__(averaging, entity_model_name, rule_based_entity_detector_data)
-        self.embedding_model_name = embedding_model_name
-        self._load_embedding_model()
-
-    def _load_embedding_model(self):
-        self.embedding_model = SentenceTransformer(self.embedding_model_name)
-        return self
-
-    def fit(self, X: list[list[str]], y=None):
-        if self._is_ready_to_fit():
-            input_examples = [
-                InputExample(doc, self.embedding_model.encode(doc)) for doc in X
-            ]
-
-            self.averaging_model = self.averaging_model.fit(input_examples)
-            self.document_embeddings_ = None
-        else:
-            raise NotReadyToFit(
-                "Call load_embedding_model and load_entity_detector_model funcs before fitting."
-            )
-
-        return self
-
-    def transform(self, X):
-        check_is_fitted(self)
-
-        sentence_embeddings = self.embedding_model.encode(X)
-        input_examples = [
-            InputExample(doc, embed) for doc, embed in zip(X, sentence_embeddings)
-        ]
-
-        embeddings = self.averaging_model.transform(input_examples)
-        if self.document_embeddings_ is None:
-            self.document_embeddings_ = embeddings
-
-        return embeddings
-
-
-# Maybe for future experiments
-class TfidfVectorizer(Vectorizer, BaseEstimator, TransformerMixin):
-    pass
-
-
-class FasttextVectorizer(Vectorizer, BaseEstimator, TransformerMixin):
-    pass
-
-
-class SimCSEVectorizer(Vectorizer, BaseEstimator, TransformerMixin):
-    pass
