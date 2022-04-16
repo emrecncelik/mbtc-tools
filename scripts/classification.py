@@ -61,12 +61,12 @@ def main(args):
 
         config = args.clf.__dict__.copy()
         config.update(args.vect.__dict__.copy())
-
-        run = wandb.init(
-            project=args.common.wandb_project,
-            tags=[args.data.target_column],
-            config=config,
-        )
+        if not args.common.disable_wandb:
+            run = wandb.init(
+                project=args.common.wandb_project,
+                tags=[args.data.target_column],
+                config=config,
+            )
 
         logger.info(f"Training classifier for target: {args.data.target_column}")
         train_path = get_mst_data_path(
@@ -110,6 +110,7 @@ def main(args):
             text_column=args.data.text_column,
             usecols=[args.data.target_column],
         )
+
         if args.data.shuffle:
             train = shuffle(train)
         if args.data.max_train_examples:
@@ -169,17 +170,21 @@ def main(args):
             verbose=2,
             n_jobs=cpu_count(),
         )
-        log_results_to_wandb(y_train, val_preds, "validation", encoder.classes_)
+        if not args.common.disable_wandb:
+            log_results_to_wandb(y_train, val_preds, "validation", encoder.classes_)
         if args.clf.do_test:
             logger.info("Test results =============================")
             classifier.fit(X_train, y_train)
             test_preds = classifier.predict(X_test)
-            log_results_to_wandb(y_test, test_preds, "test", encoder.classes_)
-        run.finish()
+            if not args.common.disable_wandb:
+                log_results_to_wandb(y_test, test_preds, "test", encoder.classes_)
+        if not args.common.disable_wandb:
+            run.finish()
 
     except KeyboardInterrupt:
         logger.info("Classification manually interrupted, stopping run.")
-        run.finish()
+        if not args.common.disable_wandb:
+            run.finish()
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ class CommonArguments(Serializable):
     output_dir: str  # Output dir for experiment outputs (models, cache etc.)
     seed: Optional[int] = None
     wandb_project: str = "mbtc"
+    disable_wandb: bool = False
 
 
 @dataclass
