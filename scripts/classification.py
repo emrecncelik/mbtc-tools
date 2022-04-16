@@ -1,5 +1,4 @@
 from __future__ import annotations
-from multiprocessing import cpu_count
 
 import os
 import wandb
@@ -12,7 +11,6 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
     classification_report,
-    confusion_matrix,
 )
 from sentence_transformers import SentenceTransformer
 
@@ -168,7 +166,7 @@ def main(args):
             y_train,
             cv=loo,
             verbose=2,
-            n_jobs=cpu_count(),
+            n_jobs=args.common.n_jobs,
         )
         if not args.common.disable_wandb:
             log_results_to_wandb(y_train, val_preds, "validation", encoder.classes_)
