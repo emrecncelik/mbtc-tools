@@ -11,12 +11,13 @@ class CommonArguments(Serializable):
     input_dir: str  # Input dir containing mst_formatted.csv, keywords.json
     output_dir: str  # Output dir for experiment outputs (models, cache etc.)
     seed: Optional[int] = None
+    wandb_project: str = "mbtc"
 
 
 @dataclass
 class ClassifierArguments(Serializable):
     pipeline: list[str] = field(
-        choices=["pca", "svm", "elm", "sbert_vectorizer", "scaler"],
+        choices=["pca", "svm", "sbert_vectorizer", "scaler"],
         default_factory=["sbert_vectorizer", "scaler", "svc"].copy,
     )
     do_test: bool = False
@@ -33,6 +34,8 @@ class VectorizerArguments(Serializable):
     averaging: Optional[str] = field(
         choices=["simple", "weighted_average", "weighted_removal"], default="simple"
     )  # Averaging method to calculate doc embeddings. Options are 'simple', 'weighted_removal' and 'weighted_average'
+    weight_per_entity: float = 1
+    min_weight: float = 1
 
 
 @dataclass
