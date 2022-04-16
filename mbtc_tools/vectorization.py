@@ -7,7 +7,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 from weighted_bert.data import InputExample
 from weighted_bert.models import WeightedAverage, WeightedRemoval
-
+from sklearn.preprocessing import FunctionTransformer
 from mbtc_tools.utils import detect_keywords
 
 logger = logging.getLogger(__name__)
@@ -34,14 +34,21 @@ def initialize_averaging_model(
     averaging_method: str,
     rule_based_entity_detector_data: dict = None,
     model_path_or_checkpoint: str = None,
+    **kwargs
 ):
     if averaging_method == "simple":
-        return lambda x: np.mean(x, axis=0)
+
+        def simple_avg(input_examples: list[InputExample]):
+            return [np.mean(ex.sentence_embeddings, axis=0) for ex in input_examples]
+
+        return FunctionTransformer(simple_avg)
+
     elif averaging_method == "weighted_average":
         if rule_based_entity_detector_data:
             return WeightedAverage(
                 entity_detector=detect_keywords,
                 entity_detector_kwargs=rule_based_entity_detector_data,
+                **kwargs
             )
         elif model_path_or_checkpoint:
             raise NotImplementedError
@@ -51,6 +58,7 @@ def initialize_averaging_model(
             return WeightedRemoval(
                 entity_detector=detect_keywords,
                 entity_detector_kwargs=rule_based_entity_detector_data,
+                **kwargs
             )
         elif model_path_or_checkpoint:
             raise NotImplementedError
