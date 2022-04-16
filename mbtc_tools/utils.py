@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 def get_mst_data_path(datadir: str, target_variable: str = None, split: str = None):
-    print(target_variable, split)
     if target_variable != None and split != None:
         output_path = os.path.join(datadir, f"{target_variable}_formatted")
         return f"{output_path}_{split}.csv"
