@@ -39,7 +39,9 @@ def initialize_averaging_model(
     if averaging_method == "simple":
 
         def simple_avg(input_examples: list[InputExample]):
-            return [np.mean(ex.sentence_embeddings, axis=0) for ex in input_examples]
+            return np.array(
+                [np.mean(ex.sentence_embeddings, axis=0) for ex in input_examples]
+            )
 
         return FunctionTransformer(simple_avg)
 
