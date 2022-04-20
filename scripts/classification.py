@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+from typing import Counter
 import wandb
 import logging
 import pandas as pd
+import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.pipeline import Pipeline
 from sklearn.utils import shuffle
@@ -12,8 +14,9 @@ from sklearn.metrics import (
     ConfusionMatrixDisplay,
     classification_report,
 )
+from sklearn.manifold import TSNE
 from sentence_transformers import SentenceTransformer
-
+import plotly.express as px
 from arguments import (
     DataArguments,
     VectorizerArguments,
@@ -34,6 +37,7 @@ from simple_parsing import ArgumentParser
 from sklearn.svm import SVC
 from sklearn.model_selection import LeaveOneOut, cross_val_predict
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,7 +51,7 @@ def log_results_to_wandb(
     wandb.log({f"{split}_cm": cm.figure_})
     logger.info(f"{split.capitalize()} results =============================")
     clf_report = classification_report(
-        y_test, y_pred, target_names=classes, output_dict=True
+        y_test, y_pred, target_names=classes, output_dict=True, zero_division=0
     )
     logger.info(pd.DataFrame(clf_report))
     wandb.log({split: clf_report})
@@ -65,6 +69,7 @@ def main(args):
                 tags=[args.data.target_column],
                 config=config,
             )
+            wandb.run.name = f"{args.data.target_column[:3]}_wpe{args.vect.weight_per_entity}_mw{args.vect.min_weight}_{wandb.run.id}"
 
         logger.info(f"Training classifier for target: {args.data.target_column}")
         train_path = get_mst_data_path(
@@ -150,6 +155,36 @@ def main(args):
         embedding_model = SentenceTransformer(args.vect.vectorizer)
         X_train = get_input_examples_from_docs(X_train, embedding_model)
         X_test = get_input_examples_from_docs(X_test, embedding_model)
+
+        embeds = averaging_model.fit_transform(X_train + X_test)
+        tsne = TSNE(
+            n_components=2,
+            perplexity=5,
+            learning_rate="auto",
+            init="pca",
+            random_state=args.common.seed,
+            n_iter=5000,
+        )
+        embeds = tsne.fit_transform(embeds)
+        labels = np.append(
+            encoder.inverse_transform(y_train), encoder.inverse_transform(y_test)
+        )
+        labels = [str(l) for l in labels]
+        fig = px.scatter(
+            x=embeds[:, 0],
+            y=embeds[:, 1],
+            color=labels,
+            title=f"{args.data.target_column}, {args.vect.averaging}",
+            opacity=0.8,
+        )
+        wandb.log({"embeddings": fig})
+
+        x = [str(label) for label in encoder.classes_]
+        counter = Counter(labels)
+        y = [counter[label] for label in x]
+        fig = px.bar(x=x, y=y)
+        wandb.log({"label_dist": fig})
+
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
         loo = LeaveOneOut()
         classifier = Pipeline(
@@ -168,6 +203,7 @@ def main(args):
             verbose=2,
             n_jobs=args.common.n_jobs,
         )
+
         if not args.common.disable_wandb:
             log_results_to_wandb(y_train, val_preds, "validation", encoder.classes_)
         if args.clf.do_test:
@@ -198,7 +234,7 @@ if __name__ == "__main__":
     INPUT_DIR = "/home/emrecan/workspace/psychology-project/data"
     OUTPUT_DIR = "/home/emrecan/workspace/psychology-project/outputs"
     # args = parser.parse_args(
-    #     f"--input_dir {INPUT_DIR} --output_dir {OUTPUT_DIR} --seed 1 --averaging weighted_average --target_column attachment_label ".split()
+    #     f"--input_dir {INPUT_DIR} --output_dir {OUTPUT_DIR} --seed 1 --averaging weighted_average --target_column attachment_label --disable_wandb".split()
     # )
     args = parser.parse_args()
 
