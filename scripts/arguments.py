@@ -11,7 +11,7 @@ class CommonArguments(Serializable):
     input_dir: str  # Input dir containing mst_formatted.csv, keywords.json
     output_dir: str  # Output dir for experiment outputs (models, cache etc.)
     seed: Optional[int] = None
-    n_jobs: int = None
+    n_jobs: Optional[int] = None
     wandb_project: str = "mbtc"
     disable_wandb: bool = False
 
