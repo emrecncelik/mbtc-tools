@@ -130,7 +130,8 @@ if __name__ == "__main__":
                     mst_transcripts,
                     mst_transcripts[args.config.target_variable],
                     test_size=args.config.test_size,
-                    stratify=mst_transcripts[args.config.target_variable],
+                    # stratify=mst_transcripts[args.config.target_variable],
+                    # Add binning + stratification for numeric target
                 )
             else:
                 train = mst_transcripts
