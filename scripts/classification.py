@@ -177,13 +177,21 @@ def main(args):
             title=f"{args.data.target_column}, {args.vect.averaging}",
             opacity=0.8,
         )
-        wandb.log({"embeddings": fig})
+
+        if not args.common.disable_wandb:
+            wandb.log({"embeddings": fig})
+        else:
+            fig.show()
 
         x = [str(label) for label in encoder.classes_]
         counter = Counter(labels)
         y = [counter[label] for label in x]
         fig = px.bar(x=x, y=y)
-        wandb.log({"label_dist": fig})
+
+        if not args.common.disable_wandb:
+            wandb.log({"label_dist": fig})
+        else:
+            fig.show()
 
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
         loo = LeaveOneOut()
